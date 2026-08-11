@@ -1,104 +1,3 @@
-<?php
-declare(strict_types=1);
-
-require_once __DIR__ . '/db.php';
-
-function sendJsonResponse(
-    bool $success,
-    string $message,
-    int $statusCode = 200
-): never {
-    http_response_code($statusCode);
-    header('Content-Type: application/json; charset=utf-8');
-
-    echo json_encode(
-        [
-            'success' => $success,
-            'message' => $message,
-        ],
-        JSON_UNESCAPED_UNICODE
-    );
-
-    exit;
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST'
-    && ($_POST['action'] ?? '') === 'save_contact_message'
-) {
-    $name = trim((string) ($_POST['name'] ?? ''));
-    $email = trim((string) ($_POST['email'] ?? ''));
-    $subject = trim((string) ($_POST['subject'] ?? ''));
-    $message = trim((string) ($_POST['message'] ?? ''));
-    $website = trim((string) ($_POST['website'] ?? ''));
-
-    /*
-     * Honeypot spam protection.
-     * Real users never see or complete the website field.
-     */
-    if ($website !== '') {
-        sendJsonResponse(true, 'Message sent successfully.');
-    }
-
-    if ($name === '' || $email === '' || $subject === '' || $message === '') {
-        sendJsonResponse(
-            false,
-            'Please complete all contact fields.',
-            422
-        );
-    }
-
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        sendJsonResponse(
-            false,
-            'Please enter a valid email address.',
-            422
-        );
-    }
-
-    if (mb_strlen($name) > 120
-        || mb_strlen($email) > 190
-        || mb_strlen($subject) > 190
-        || mb_strlen($message) > 5000
-    ) {
-        sendJsonResponse(
-            false,
-            'One or more fields are too long.',
-            422
-        );
-    }
-
-    try {
-        $pdo = getDatabaseConnection();
-
-        $statement = $pdo->prepare(
-            'INSERT INTO contact_messages
-                (full_name, email, subject, message)
-             VALUES
-                (:full_name, :email, :subject, :message)'
-        );
-
-        $statement->execute([
-            'full_name' => $name,
-            'email'     => $email,
-            'subject'   => $subject,
-            'message'   => $message,
-        ]);
-
-        sendJsonResponse(
-            true,
-            'Your message was saved successfully.'
-        );
-    } catch (Throwable $exception) {
-        error_log($exception->getMessage());
-
-        sendJsonResponse(
-            false,
-            'Database connection failed. Please open setup.php first.',
-            500
-        );
-    }
-}
-?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1005,27 +904,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
 
                 <form
                     class="contact-form reveal"
-                    id="contactForm"
-                    method="post"
-                    action="index.php#contact">
-
-                    <input
-                        type="hidden"
-                        name="action"
-                        value="save_contact_message">
-
-                    <div
-                        aria-hidden="true"
-                        style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;">
-                        <label>
-                            WEBSITE
-                            <input
-                                type="text"
-                                name="website"
-                                tabindex="-1"
-                                autocomplete="off">
-                        </label>
-                    </div>
+                    id="contactForm">
 
                     <div class="form-row">
                         <label>
@@ -1144,6 +1023,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     </div>
 
     <div class="toast" id="toast">READY</div>
+
+    <script>
+        /* GitHub Pages contact form: opens the visitor's email app. */
+        document.addEventListener("submit", function (event) {
+            const form = event.target;
+
+            if (!form.matches("#contactForm")) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+
+            const name = document.getElementById("contactName").value.trim();
+            const email = document.getElementById("contactEmail").value.trim();
+            const subject = document.getElementById("contactSubject").value.trim();
+            const message = document.getElementById("contactMessage").value.trim();
+
+            const emailSubject = subject || "Portfolio Inquiry";
+            const emailBody = [
+                "Name: " + name,
+                "Email: " + email,
+                "",
+                message
+            ].join("\n");
+
+            const mailtoUrl =
+                "mailto:liriocher25@gmail.com" +
+                "?subject=" + encodeURIComponent(emailSubject) +
+                "&body=" + encodeURIComponent(emailBody);
+
+            const toast = document.getElementById("toast");
+            if (toast) {
+                toast.textContent = "OPENING YOUR EMAIL APP";
+                toast.classList.add("show");
+                window.setTimeout(function () {
+                    toast.classList.remove("show");
+                }, 2500);
+            }
+
+            window.location.href = mailtoUrl;
+        }, true);
+    </script>
 
     <script>
         document.addEventListener("DOMContentLoaded", function () {
